@@ -1,0 +1,1311 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quantiica | PLD Monitor</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/webp" href="./logo.webp" />
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+  <!-- Viz.js (Graphviz in browser) -->
+  <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2/viz.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2/full.render.js"></script>
+
+  <style>
+    :root{
+      --bg: #0E1117;
+      --panel: #151A22;
+      --card: #1A202B;
+      --border: #2B3444;
+      --text: #FAFAFA;
+      --muted: #AAB3C5;
+      --ok: #00CC96;
+      --warn: #FFA500;
+      --risk: #FF4B4B;
+      --ink: #0b0f14;
+    }
+
+    html, body { height: 100%; }
+    body{
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+
+    /* App shell */
+    .app-shell{
+      padding: 22px 22px 26px;
+    }
+
+    /* Top bar */
+    .topbar{
+      background: rgba(21,26,34,0.72);
+      border: 1px solid rgba(43,52,68,0.85);
+      border-radius: 16px;
+      padding: 14px 16px;
+      backdrop-filter: blur(10px);
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      min-width: 240px;
+    }
+    .brand img{
+      height: 42px;
+      width: auto;
+      display:block;
+      object-fit: contain;
+    }
+    .brand .brand-title{
+      font-weight: 700;
+      font-size: 16px;
+      line-height: 1.1;
+      color: var(--text);
+      margin: 0;
+    }
+    .brand .brand-sub{
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0;
+      margin-top: 2px;
+    }
+
+    /* Inputs */
+    .search-input{
+      background: #0F141C;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .search-input::placeholder{ color: #7d879d; }
+
+    .status-pill{
+      background: #0F141C;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 12px;
+    }
+    .status-pill .dot{
+      display:inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ok);
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    /* Cards */
+    .panel-card{
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .panel-title{
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(43,52,68,0.65);
+    }
+    .subtle{
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .badge-risk{
+      background: var(--risk);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 11px;
+      display:inline-flex;
+      align-items:center;
+      gap: 6px;
+    }
+    .badge-ok{
+      background: var(--ok);
+      color: #00120b;
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 11px;
+      display:inline-flex;
+      align-items:center;
+      gap: 6px;
+    }
+
+    .kv{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .kv .kv-item{
+      background: #0F141C;
+      border: 1px solid rgba(43,52,68,0.85);
+      border-radius: 12px;
+      padding: 10px 10px;
+    }
+    .kv .k{
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .kv .v{
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 600;
+      word-break: break-word;
+    }
+
+    /* Alerts */
+    .alert-card{
+      border-radius: 14px;
+      border: 1px solid rgba(43,52,68,0.85);
+      padding: 12px 12px;
+      margin-bottom: 10px;
+      background: #0F141C;
+    }
+    .alert-risk{ border-left: 4px solid var(--risk); }
+    .alert-warn{ border-left: 4px solid var(--warn); }
+    .alert-ok{ border-left: 4px solid var(--ok); }
+
+    /* Tables */
+    .table-darkish{
+      --bs-table-bg: #0F141C;
+      --bs-table-border-color: rgba(43,52,68,0.85);
+      --bs-table-color: var(--text);
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(43,52,68,0.85);
+    }
+
+    /* Chart containers */
+    .chart-box{
+      background: #0F141C;
+      border: 1px solid rgba(43,52,68,0.85);
+      border-radius: 14px;
+      padding: 10px;
+    }
+
+    /* Graph */
+    .graph-wrap{
+      background: #0F141C;
+      border: 1px solid rgba(43,52,68,0.85);
+      border-radius: 14px;
+      padding: 10px;
+      overflow: auto;
+      max-height: 320px;
+    }
+    .graph-wrap svg{
+      width: 100%;
+      height: auto;
+    }
+
+    /* Buttons */
+    .btn-soft{
+      background: #0F141C;
+      border: 1px solid rgba(43,52,68,0.85);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-weight: 700;
+    }
+    .btn-soft:hover{ border-color: #3b4a63; }
+
+    .btn-primaryish{
+      background: var(--risk);
+      border: 1px solid rgba(0,0,0,0.2);
+      color: #fff;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-weight: 800;
+    }
+    .btn-primaryish:hover{ filter: brightness(0.95); }
+
+    /* Footer */
+    .footer{
+      margin-top: 18px;
+      color: #7d879d;
+      font-size: 12px;
+      text-align:center;
+    }
+
+    /* Modal */
+    .modal-overlay{
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.show{ display: flex; }
+    .modal-content{
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-close{
+      float: right;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .modal-close:hover{ color: var(--text); }
+
+    /* Responsive spacing */
+    @media (max-width: 992px){
+      .app-shell{ padding: 14px; }
+      .topbar{ padding: 12px; }
+      .brand{ min-width: unset; }
+    }
+
+    /* Client Dropdown */
+    .client-dropdown{
+      position: relative;
+    }
+    .client-dropdown-menu{
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #0F141C;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-top: 4px;
+      max-height: 300px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+    }
+    .client-dropdown-menu.show{ display: block; }
+    .client-dropdown-item{
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(43,52,68,0.5);
+      font-size: 13px;
+    }
+    .client-dropdown-item:hover{
+      background: rgba(43,52,68,0.5);
+    }
+    .client-dropdown-item:last-child{
+      border-bottom: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-shell container-fluid">
+    <!-- TOP BAR -->
+    <div class="topbar mb-3">
+      <div class="row g-2 align-items-center">
+        <div class="col-12 col-lg-3">
+          <div class="brand">
+            <img src="./logo.webp" alt="Logo" />
+            <div>
+              <p class="brand-title mb-0">Quantiica</p>
+              <p class="brand-sub mb-0">PLD Monitor</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+          <div class="client-dropdown">
+            <input type="text" id="clientSearch" class="form-control search-input" placeholder="🔍 Buscar cliente por nombre..." autocomplete="off">
+            <div id="clientDropdown" class="client-dropdown-menu"></div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-3">
+          <div class="d-flex align-items-center justify-content-end gap-2">
+            <div class="status-pill" style="padding:8px 12px;">
+              <span class="dot"></span><strong>Motor IA:</strong> ONLINE
+            </div>
+            <button class="btn btn-soft" style="padding:8px 16px;" onclick="toastMsg('🔄 Datos recargados')">
+              🔄 Recargar datos
+            </button>
+          </div>
+          <div class="text-end mt-1" style="font-size:11px;color:var(--muted);">
+            Última actualización: <span id="lastUpdate">--:--:--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTION BUTTONS -->
+    <div class="row g-2 mb-3">
+      <div class="col-12 col-md-4">
+        <button class="btn w-100" style="background:#00CC96;color:#00120b;border-radius:12px;padding:12px;font-weight:800;" onclick="toastMsg('✅ Cliente validado')">
+          🟢 Validar
+        </button>
+      </div>
+      <div class="col-12 col-md-4">
+        <button class="btn w-100" style="background:#FF4B4B;color:#fff;border-radius:12px;padding:12px;font-weight:800;" onclick="toastMsg('🔒 Cliente bloqueado')">
+          🔴 Bloquear
+        </button>
+      </div>
+      <div class="col-12 col-md-4">
+        <button class="btn w-100" style="background:#FFA500;color:#fff;border-radius:12px;padding:12px;font-weight:800;" onclick="toastMsg('🟠 Marcado en revisión')">
+          🟠 En revisión
+        </button>
+      </div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div class="row g-3">
+      <!-- LEFT: KYC -->
+      <div class="col-12 col-xl-3">
+        <div class="panel-card">
+          <div class="panel-title">👤 Perfil KYC</div>
+
+          <div class="mb-3" id="kycHeader">
+            <div class="h5 mb-1" style="color:#fff;font-weight:900;" id="clientName">Seleccione un cliente</div>
+            <div class="subtle mb-2" id="clientInfo">--</div>
+            <div class="mb-2" id="clientBadges"></div>
+          </div>
+
+          <div class="kv" id="kycDetails">
+            <div class="kv-item">
+              <div class="k">RFC</div>
+              <div class="v" id="clientRFC">--</div>
+            </div>
+            <div class="kv-item">
+              <div class="k">Giro</div>
+              <div class="v" id="clientOcupation">--</div>
+            </div>
+            <div class="kv-item">
+              <div class="k">Ciudad</div>
+              <div class="v" id="clientCity">--</div>
+            </div>
+            <div class="kv-item">
+              <div class="k">Estado</div>
+              <div class="v" id="clientState">--</div>
+            </div>
+            <div class="kv-item">
+              <div class="k">País</div>
+              <div class="v" id="clientCountry">--</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER: AI + GRAPH -->
+      <div class="col-12 col-xl-6">
+        <div class="panel-card mb-3">
+          <div class="panel-title">🧠 Motor de Riesgo - Score y explicabilidad</div>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <div class="chart-box">
+                <div class="subtle mb-2 text-center">Score de Riesgo</div>
+                <div id="gaugeChart" style="height:280px;"></div>
+              </div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="chart-box">
+                <div class="subtle mb-2">Factores principales</div>
+                <div id="shapChart" style="height:280px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-title">🕸️ Red de vínculos - Concentración y conexiones</div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="subtle"></div>
+            <div id="graphBadge" class="badge" style="background:#FFA500;color:#000;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:800;display:none;">
+              ⚠️ Señales fuertes
+            </div>
+          </div>
+          <div class="graph-wrap" id="graphvizBox" style="max-height:400px;">
+            <div class="subtle">Cargando grafo...</div>
+          </div>
+          <div class="text-end mt-2">
+            <span class="subtle" id="riskyConnections"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: EVIDENCE + ACTIONS -->
+      <div class="col-12 col-xl-3">
+        <!-- All Transactions Panel -->
+        <div class="panel-card mb-3">
+          <div class="panel-title">📊 Todas las Transacciones</div>
+          <div id="allTransactions" style="max-height:150px;overflow-y:auto;">
+            <div class="subtle text-center py-2">Esperando transacciones...</div>
+          </div>
+        </div>
+
+        <!-- Real-time Alerts Panel -->
+        <div class="panel-card mb-3">
+          <div class="panel-title">🔴 Alertas en Tiempo Real</div>
+          <div id="realtimeAlerts" style="max-height:150px;overflow-y:auto;">
+            <div class="subtle text-center py-2">Esperando transacciones...</div>
+          </div>
+        </div>
+
+        <!-- Static Alerts -->
+        <div class="panel-card mb-3">
+          <div class="panel-title">🚨 Alertas - Hallazgos recientes</div>
+          <div id="staticAlerts" style="max-height:400px;overflow-y:auto;">
+            <div class="subtle text-center py-2">Seleccione un cliente</div>
+          </div>
+        </div>
+
+        <!-- Recent Transactions (30 days) -->
+        <div class="panel-card">
+          <div class="panel-title">📋 Transacciones del Cliente</div>
+          <div class="table-responsive table-darkish" style="max-height:300px;overflow-y:auto;" id="transactionsScroll">
+            <table class="table table-sm mb-0">
+              <thead style="position:sticky;top:0;background:#0F141C;z-index:1;">
+                <tr class="subtle">
+                  <th>Fecha</th>
+                  <th>Monto</th>
+                  <th>Tipo</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="recentTransactions">
+                <tr><td colspan="4" class="text-center subtle">Seleccione un cliente</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">Quantiica — Confidencial</div>
+  </div>
+
+  <!-- Transaction Detail Modal -->
+  <div id="txModal" class="modal-overlay">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeTxModal()">&times;</span>
+      <div id="txModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999;">
+    <div id="liveToast" class="toast text-bg-dark border-0" role="alert" aria-live="assertive" aria-atomic="true"
+         style="border:1px solid rgba(43,52,68,.85); border-radius:14px;">
+      <div class="d-flex">
+        <div class="toast-body" id="toastBody">Listo.</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    const API_URL = 'https://9bd89oc6j9.execute-api.us-east-1.amazonaws.com/dev';
+    const WS_URL = 'wss://ujmv2bcjua.execute-api.us-east-1.amazonaws.com/dev/';
+    let ws = null;
+    let allClients = [];
+    let selectedClient = null;
+    let allTransactions = [];
+    let allCounterparties = [];
+    let displayedTransactions = 0;
+    const TRANSACTIONS_PER_PAGE = 10;
+
+    // ---------------------------
+    // Load Counterparties
+    // ---------------------------
+    async function loadCounterparties() {
+      try {
+        const response = await fetch(`${API_URL}/counterparties`);
+        const data = await response.json();
+        allCounterparties = data.counterparties;
+      } catch (error) {
+        console.error('Error loading counterparties:', error);
+      }
+    }
+
+    // ---------------------------
+    // Load Clients
+    // ---------------------------
+    async function loadClients() {
+      try {
+        const response = await fetch(`${API_URL}/clients`);
+        const data = await response.json();
+        allClients = data.clients;
+        renderClientDropdown(allClients);
+      } catch (error) {
+        console.error('Error loading clients:', error);
+      }
+    }
+
+    // ---------------------------
+    // Render Client Dropdown
+    // ---------------------------
+    function renderClientDropdown(clients) {
+      const dropdown = document.getElementById('clientDropdown');
+      dropdown.innerHTML = clients.map(c => {
+        const name = `${c.first_name || ''} ${c.last_name || ''}`.trim();
+        return `<div class="client-dropdown-item" data-id="${c.client_id}">${name} - ${c.person_type}</div>`;
+      }).join('');
+      
+      dropdown.querySelectorAll('.client-dropdown-item').forEach(item => {
+        item.addEventListener('click', function() {
+          const clientId = this.getAttribute('data-id');
+          const client = allClients.find(c => c.client_id === clientId);
+          if (client) {
+            const name = `${client.first_name || ''} ${client.last_name || ''}`.trim();
+            document.getElementById('clientSearch').value = name;
+            selectedClient = client;
+            updateKYCProfile(client);
+            loadClientTransactions(client.client_id);
+            dropdown.classList.remove('show');
+          }
+        });
+      });
+    }
+
+    // ---------------------------
+    // Client Search Handler
+    // ---------------------------
+    document.getElementById('clientSearch').addEventListener('input', function(e) {
+      const searchValue = e.target.value.toLowerCase();
+      const dropdown = document.getElementById('clientDropdown');
+      
+      if (searchValue.length === 0) {
+        renderClientDropdown(allClients);
+        dropdown.classList.add('show');
+        return;
+      }
+      
+      const filtered = allClients.filter(c => {
+        const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
+        return name.includes(searchValue);
+      });
+      
+      renderClientDropdown(filtered);
+      dropdown.classList.add('show');
+    });
+
+    document.getElementById('clientSearch').addEventListener('focus', function() {
+      const dropdown = document.getElementById('clientDropdown');
+      if (allClients.length > 0) {
+        dropdown.classList.add('show');
+      }
+    });
+
+    document.addEventListener('click', function(e) {
+      const dropdown = document.getElementById('clientDropdown');
+      const search = document.getElementById('clientSearch');
+      if (!dropdown.contains(e.target) && e.target !== search) {
+        dropdown.classList.remove('show');
+      }
+    });
+
+    // ---------------------------
+    // Update KYC Profile
+    // ---------------------------
+    function updateKYCProfile(client) {
+      console.log('Selected client:', client);
+      const name = client.person_type === 'Moral' 
+        ? client.first_name 
+        : `${client.first_name} ${client.last_name}`;
+      
+      document.getElementById('clientName').textContent = name;
+      document.getElementById('clientInfo').textContent = `ID: ${client.client_id} • Tipo: ${client.person_type}`;
+      document.getElementById('clientRFC').textContent = client.rfc || '--';
+      document.getElementById('clientOcupation').textContent = client.ocupation || '--';
+      document.getElementById('clientCity').textContent = client.city || '--';
+      document.getElementById('clientState').textContent = client.state || '--';
+      document.getElementById('clientCountry').textContent = client.country || '--';
+    }
+
+    // ---------------------------
+    // Load Client Transactions
+    // ---------------------------
+    async function loadClientTransactions(accountId) {
+      console.log('Loading transactions for client_id:', accountId);
+      try {
+        const response = await fetch(`${API_URL}/transactions?client_id=${accountId}`);
+        const data = await response.json();
+        console.log('Transactions API response:', data);
+        
+        allTransactions = data.transactions
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        console.log('Sorted transactions:', allTransactions.length);
+        
+        displayedTransactions = 0;
+        document.getElementById('recentTransactions').innerHTML = '';
+        loadMoreTransactions();
+        
+        // Load alerts for this client
+        loadClientAlerts();
+        
+        // Render charts with new data
+        renderGauge();
+        renderShap();
+        
+        // Render graph
+        renderGraphviz();
+      } catch (error) {
+        console.error('Error loading transactions:', error);
+        document.getElementById('recentTransactions').innerHTML = '<tr><td colspan="4" class="text-center subtle">Error al cargar</td></tr>';
+      }
+    }
+
+    // ---------------------------
+    // Load Client Alerts
+    // ---------------------------
+    function loadClientAlerts() {
+      const alertsContainer = document.getElementById('staticAlerts');
+      
+      // Filter transactions with risk_score >= 30 and status ANALYZED
+      const alerts = allTransactions
+        .filter(tx => tx.status === 'ANALYZED' && (tx.risk_score || 0) >= 30)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .slice(0, 10);
+      
+      if (alerts.length === 0) {
+        alertsContainer.innerHTML = '<div class="subtle text-center py-2">No hay alertas para este cliente</div>';
+        return;
+      }
+      
+      alertsContainer.innerHTML = alerts.map(tx => {
+        // Get counterparty name
+        const counterparty = allCounterparties.find(cp => cp.account_id === tx.counterparty_account_id);
+        const counterpartyName = counterparty ? counterparty.name : tx.counterparty_account_id;
+        const counterpartyCountry = counterparty ? counterparty.country : '';
+        
+        // Extract features that increase risk, sorted by magnitude
+        const featureMap = {
+          'unique_cp_1d': 'Realiza transferencias con múltiples ordenantes',
+          'tx_count_1h': 'Entrada y/o salida rápida de recursos',
+          'mean_amount': 'Cliente sale de su patrón transaccional',
+          'std_amount': 'Cliente sale de su patrón transaccional',
+          'amount': 'Monto anómalo detectado',
+          'movement_type': 'Alerta',
+          'client_geo_risk': 'Jurisdicción de Riesgo (Cliente)',
+          'counterparty_geo_risk': 'Jurisdicción de Riesgo (Contraparte)',
+          'day_part': 'Horario Inusual'
+        };
+        
+        let features = [];
+        try {
+          const explanation = typeof tx.explanation === 'string' ? JSON.parse(tx.explanation) : tx.explanation;
+          if (explanation && explanation.top_risk_factors) {
+            features = explanation.top_risk_factors
+              .filter(f => f.impact === 'increases_risk')
+              .sort((a, b) => b.magnitude - a.magnitude)
+              .map(f => featureMap[f.feature] || f.feature)
+              .join(' | ');
+          }
+        } catch (e) {
+          console.error('Error parsing explanation:', e);
+        }
+        
+        const title = features || 'Concentración / Jurisdicción Riesgo';
+        const amount = parseFloat(tx.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const action = tx.movement_type === 'IN' ? 'Recibió' : 'Envió';
+        const preposition = tx.movement_type === 'IN' ? 'de' : 'a';
+        const subtitle = `${action} $${amount} ${preposition} ${counterpartyName}${counterpartyCountry ? ' (' + counterpartyCountry + ')' : ''}`;
+        
+        return `
+          <div class="alert-card" style="background:#FFE5E5;border-left:4px solid var(--risk);margin-bottom:12px;cursor:pointer;" onclick="showTxDetail('${tx.transaction_id}')">
+            <div style="font-weight:800;color:#8B0000;font-size:12px;margin-bottom:4px;">🚨 ${title}</div>
+            <div style="color:#8B0000;font-size:11px;">${subtitle}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ---------------------------
+    // Load More Transactions (Pagination)
+    // ---------------------------
+    function loadMoreTransactions() {
+      const tbody = document.getElementById('recentTransactions');
+      const start = displayedTransactions;
+      const end = Math.min(start + TRANSACTIONS_PER_PAGE, allTransactions.length);
+      
+      if (start >= allTransactions.length) return;
+      
+      const newRows = allTransactions.slice(start, end).map(tx => {
+        const typeIcon = tx.movement_type === 'IN' ? '⬇️' : '⬆️';
+        const typeColor = tx.movement_type === 'IN' ? '#00CC96' : '#FF4B4B';
+        return `
+          <tr style="cursor:pointer;" onclick="showTxDetail('${tx.transaction_id}')">
+            <td class="subtle" style="font-size:10px;">${new Date(tx.created_at).toLocaleDateString('es-MX')}</td>
+            <td style="font-weight:700;font-size:11px;">$${parseFloat(tx.amount).toLocaleString()}</td>
+            <td><span style="color:${typeColor};font-size:11px;">${typeIcon} ${tx.movement_type}</span></td>
+            <td><span class="badge" style="background:${tx.status==='ANALYZED'?'var(--ok)':'var(--warn)'};color:#000;font-size:9px;padding:2px 6px;">${tx.status}</span></td>
+          </tr>
+        `;
+      }).join('');
+      
+      tbody.insertAdjacentHTML('beforeend', newRows);
+      displayedTransactions = end;
+    }
+
+    // ---------------------------
+    // Infinite Scroll
+    // ---------------------------
+    document.getElementById('transactionsScroll').addEventListener('scroll', function(e) {
+      const element = e.target;
+      if (element.scrollHeight - element.scrollTop <= element.clientHeight + 50) {
+        loadMoreTransactions();
+      }
+    });
+
+    // ---------------------------
+    // WebSocket Connection
+    // ---------------------------
+    function connectWebSocket() {
+      ws = new WebSocket(WS_URL);
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        document.querySelector('.status-pill .dot').style.background = 'var(--ok)';
+      };
+      
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        handleRealtimeAlert(data);
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        document.querySelector('.status-pill .dot').style.background = 'var(--risk)';
+      };
+      
+      ws.onclose = () => {
+        console.log('WebSocket disconnected, reconnecting...');
+        setTimeout(connectWebSocket, 3000);
+      };
+    }
+
+    function handleRealtimeAlert(data) {
+      console.log('WebSocket message received:', data);
+      const now = new Date().toLocaleTimeString('es-MX');
+      
+      if (data.type === 'new_transaction') {
+        console.log('Amount received:', data.amount, 'Type:', typeof data.amount);
+        
+        // Fetch full transaction details from API
+        fetch(`${API_URL}/transactions`)
+          .then(r => r.json())
+          .then(response => {
+            const transaction = response.transactions.find(tx => tx.transaction_id === data.transaction_id);
+            if (transaction) {
+              const amount = parseFloat(transaction.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+              console.log('Fetched transaction amount:', transaction.amount, 'Formatted:', amount);
+              
+              // Add to allTransactions if it's for the current client
+              if (selectedClient && transaction.client_account_id === selectedClient.client_id) {
+                allTransactions.unshift(transaction);
+                // Refresh the transactions table
+                const tbody = document.getElementById('recentTransactions');
+                const typeIcon = transaction.movement_type === 'IN' ? '⬇️' : '⬆️';
+                const typeColor = transaction.movement_type === 'IN' ? '#00CC96' : '#FF4B4B';
+                const newRow = `
+                  <tr>
+                    <td class="subtle" style="font-size:10px;">${new Date(transaction.created_at).toLocaleDateString('es-MX')}</td>
+                    <td style="font-weight:700;font-size:11px;">$${parseFloat(transaction.amount).toLocaleString()}</td>
+                    <td><span style="color:${typeColor};font-size:11px;">${typeIcon} ${transaction.movement_type}</span></td>
+                    <td><span class="badge" style="background:var(--warn);color:#000;font-size:9px;padding:2px 6px;">${transaction.status}</span></td>
+                  </tr>
+                `;
+                tbody.insertAdjacentHTML('afterbegin', newRow);
+              }
+              
+              const allTxDiv = document.getElementById('allTransactions');
+              const txHtml = `
+                <div class="alert-card alert-ok" style="animation: fadeIn 0.3s;cursor:pointer;" onclick="showTxDetail('${data.transaction_id}')">
+                  <div style="font-weight:700;font-size:11px;">🟢 Nueva Transacción - ${now}</div>
+                  <div class="subtle">ID: ${data.transaction_id?.substring(0,8)}... | $${amount}</div>
+                  <div class="subtle" style="font-size:10px;">${transaction.movement_type} | ${transaction.tx_type}</div>
+                </div>
+              `;
+              
+              const emptyState = allTxDiv.querySelector('.subtle.text-center');
+              if (emptyState) {
+                allTxDiv.innerHTML = txHtml;
+              } else {
+                allTxDiv.insertAdjacentHTML('afterbegin', txHtml);
+              }
+              
+              const txs = allTxDiv.querySelectorAll('.alert-card');
+              if (txs.length > 5) txs[txs.length - 1].remove();
+            }
+          })
+          .catch(err => console.error('Error fetching transaction:', err));
+      } else if (data.type === 'analyzed_transaction') {
+        // Only show if risk_score >= 50
+        if (data.risk_score < 50) return;
+        
+        // Check if transaction belongs to selected client
+        const isClientTransaction = selectedClient && 
+                                   data.client_account_id === selectedClient.client_id;
+        
+        // Fetch full transaction if explanation is missing
+        const fetchAndUpdate = async () => {
+          let transactionData = data;
+          
+          if (!data.explanation && isClientTransaction) {
+            try {
+              const response = await fetch(`${API_URL}/transactions?client_id=${selectedClient.client_id}`);
+              const result = await response.json();
+              const fullTx = result.transactions.find(tx => tx.transaction_id === data.transaction_id);
+              if (fullTx) {
+                transactionData = fullTx;
+              }
+            } catch (err) {
+              console.error('Error fetching transaction details:', err);
+            }
+          }
+          
+          // Update transaction in allTransactions array
+          if (isClientTransaction) {
+            const txIndex = allTransactions.findIndex(tx => tx.transaction_id === data.transaction_id);
+            if (txIndex !== -1) {
+              allTransactions[txIndex] = {...allTransactions[txIndex], ...transactionData, status: 'ANALYZED'};
+              // Update the row in the table
+              const tbody = document.getElementById('recentTransactions');
+              const rows = tbody.querySelectorAll('tr');
+              if (rows[txIndex]) {
+                const cells = rows[txIndex].querySelectorAll('td');
+                if (cells[2]) {
+                  cells[2].innerHTML = '<span class="badge" style="background:var(--ok);color:#000;font-size:9px;padding:2px 6px;">ANALYZED</span>';
+                }
+              }
+            }
+            
+            // Reload alerts to include this new one
+            loadClientAlerts();
+            
+            // Update charts with new data
+            renderGauge();
+            renderShap();
+            
+            // Show in "Alertas en Tiempo Real" section
+            const alertsDiv = document.getElementById('realtimeAlerts');
+            const isHighRisk = data.risk_prediction === true || data.risk_score >= 75;
+            const alertClass = isHighRisk ? 'alert-risk' : 'alert-warn';
+            const icon = isHighRisk ? '🔴' : '🟡';
+            const amount = parseFloat(data.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            
+            const alertHtml = `
+              <div class="alert-card ${alertClass}" style="animation: fadeIn 0.3s;cursor:pointer;" onclick="showTxDetail('${data.transaction_id}')">
+                <div style="font-weight:700;font-size:11px;">${icon} Transacción Analizada - ${now}</div>
+                <div class="subtle">Score: ${data.risk_score} | $${amount} | ID: ${data.transaction_id?.substring(0,8)}...</div>
+              </div>
+            `;
+            
+            const emptyState = alertsDiv.querySelector('.subtle.text-center');
+            if (emptyState) {
+              alertsDiv.innerHTML = alertHtml;
+            } else {
+              alertsDiv.insertAdjacentHTML('afterbegin', alertHtml);
+            }
+            
+            const alerts = alertsDiv.querySelectorAll('.alert-card');
+            if (alerts.length > 5) alerts[alerts.length - 1].remove();
+          }
+          
+          // Always show in "All Transactions" section
+          const allTxDiv = document.getElementById('allTransactions');
+          const isHighRisk = data.risk_prediction === true || data.risk_score >= 75;
+          const alertClass = isHighRisk ? 'alert-risk' : 'alert-warn';
+          const icon = isHighRisk ? '🔴' : '🟡';
+          const amount = parseFloat(data.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          
+          const txHtml = `
+            <div class="alert-card ${alertClass}" style="animation: fadeIn 0.3s;cursor:pointer;" onclick="showTxDetail('${data.transaction_id}')">
+              <div style="font-weight:700;font-size:11px;">${icon} Analizada - ${now}</div>
+              <div class="subtle">Score: ${data.risk_score} | $${amount} | ID: ${data.transaction_id?.substring(0,8)}...</div>
+            </div>
+          `;
+          
+          const emptyState = allTxDiv.querySelector('.subtle.text-center');
+          if (emptyState) {
+            allTxDiv.innerHTML = txHtml;
+          } else {
+            allTxDiv.insertAdjacentHTML('afterbegin', txHtml);
+          }
+          
+          const txs = allTxDiv.querySelectorAll('.alert-card');
+          if (txs.length > 5) txs[txs.length - 1].remove();
+        };
+        
+        fetchAndUpdate();
+      }
+    }
+
+    // ---------------------------
+    // Load Recent Transactions
+    // ---------------------------
+    async function loadRecentTransactions() {
+      // This function is now replaced by loadClientTransactions
+      // Keeping for backward compatibility with WebSocket
+    }
+
+    // ---------------------------
+    // Toast helper
+    // ---------------------------
+    function toastMsg(msg){
+      const el = document.getElementById("liveToast");
+      document.getElementById("toastBody").textContent = msg;
+      const t = bootstrap.Toast.getOrCreateInstance(el, { delay: 2800 });
+      t.show();
+    }
+
+    // ---------------------------
+    // Transaction Detail Modal
+    // ---------------------------
+    function showTxDetail(txId) {
+      const tx = allTransactions.find(t => t.transaction_id === txId);
+      if (!tx) return;
+
+      const counterparty = allCounterparties.find(cp => cp.account_id === tx.counterparty_account_id);
+      const amount = parseFloat(tx.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      
+      let explanationHtml = '';
+      try {
+        const explanation = typeof tx.explanation === 'string' ? JSON.parse(tx.explanation) : tx.explanation;
+        if (explanation && explanation.top_risk_factors) {
+          explanationHtml = explanation.top_risk_factors
+            .slice(0, 10)
+            .map(f => `
+              <div style="padding:8px;background:#0F141C;border-radius:8px;margin-bottom:6px;">
+                <div style="font-weight:700;font-size:12px;">${f.feature}</div>
+                <div style="font-size:11px;color:var(--muted);">Impacto: ${f.impact} | Magnitud: ${f.magnitude.toFixed(4)}</div>
+              </div>
+            `).join('');
+        }
+      } catch (e) {
+        explanationHtml = '<div class="subtle">No disponible</div>';
+      }
+
+      document.getElementById('txModalBody').innerHTML = `
+        <h4 style="margin-bottom:20px;color:var(--text);">Detalle de Transacción</h4>
+        <div class="kv">
+          <div class="kv-item"><div class="k">ID</div><div class="v">${tx.transaction_id}</div></div>
+          <div class="kv-item"><div class="k">Fecha</div><div class="v">${new Date(tx.created_at).toLocaleString('es-MX')}</div></div>
+          <div class="kv-item"><div class="k">Monto</div><div class="v">$${amount}</div></div>
+          <div class="kv-item"><div class="k">Tipo</div><div class="v">${tx.movement_type} - ${tx.tx_type}</div></div>
+          <div class="kv-item"><div class="k">Cliente</div><div class="v">${tx.client_account_id}</div></div>
+          <div class="kv-item"><div class="k">Contraparte</div><div class="v">${counterparty ? counterparty.name : tx.counterparty_account_id}</div></div>
+          <div class="kv-item"><div class="k">País Contraparte</div><div class="v">${counterparty ? counterparty.country : '--'}</div></div>
+          <div class="kv-item"><div class="k">Score de Riesgo</div><div class="v" style="color:${tx.risk_score >= 75 ? 'var(--risk)' : tx.risk_score >= 50 ? 'var(--warn)' : 'var(--ok)'}">${tx.risk_score || '--'}</div></div>
+          <div class="kv-item"><div class="k">Estado</div><div class="v">${tx.status}</div></div>
+        </div>
+        <div style="margin-top:20px;">
+          <div style="font-weight:700;margin-bottom:10px;color:var(--text);">Factores de Riesgo</div>
+          ${explanationHtml}
+        </div>
+      `;
+      document.getElementById('txModal').classList.add('show');
+    }
+
+    function closeTxModal() {
+      document.getElementById('txModal').classList.remove('show');
+    }
+
+    document.getElementById('txModal').addEventListener('click', function(e) {
+      if (e.target === this) closeTxModal();
+    });
+
+    // ---------------------------
+    // Charts (Plotly)
+    // ---------------------------
+    function renderGauge(){
+      // Calculate 30-day mean risk score
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentTxs = allTransactions.filter(tx => {
+        const txDate = new Date(tx.created_at);
+        return txDate >= thirtyDaysAgo && tx.status === 'ANALYZED' && tx.risk_score != null;
+      });
+      
+      let meanRiskScore = 0;
+      if (recentTxs.length > 0) {
+        const totalRisk = recentTxs.reduce((sum, tx) => sum + (tx.risk_score || 0), 0);
+        meanRiskScore = Math.round(totalRisk / recentTxs.length);
+      }
+      
+      const barColor = meanRiskScore >= 75 ? '#FF4B4B' : meanRiskScore >= 50 ? '#FFA500' : '#00CC96';
+      
+      const fig = [{
+        type: "indicator",
+        mode: "gauge+number",
+        value: meanRiskScore,
+        number: { font: { size: 60, color: barColor } },
+        title: { text: "", font: { color: "#FAFAFA", size: 14 } },
+        gauge: {
+          axis: { range: [0, 100], tickcolor: "#AAB3C5", tickfont: { size: 6 } },
+          bar: { color: barColor, thickness: 0.8 },
+          bgcolor: "rgba(0,0,0,0)",
+          borderwidth: 0,
+          steps: [
+            { range: [0, 50],  color: "rgba(0,204,150,0.3)" },
+            { range: [50, 75], color: "rgba(255,165,0,0.3)" },
+            { range: [75, 100],color: "rgba(255,75,75,0.3)" }
+          ]
+        }
+      }];
+
+      const layout = {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        margin: { l: 20, r: 20, t: 10, b: 10 },
+        font: { color: "#FAFAFA" },
+        height: 280
+      };
+
+      Plotly.newPlot("gaugeChart", fig, layout, {displayModeBar: false, responsive: true});
+    }
+
+    function renderShap(){
+      // Calculate feature frequency from 30-day transactions
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentTxs = allTransactions.filter(tx => {
+        const txDate = new Date(tx.created_at);
+        return txDate >= thirtyDaysAgo && tx.status === 'ANALYZED' && tx.explanation;
+      });
+      
+      const featureMap = {
+        'unique_cp_1d': 'Múltiples ordenantes',
+        'tx_count_1h': 'Entrada/salida rápida',
+        'mean_amount': 'Patrón transaccional',
+        'std_amount': 'Patrón transaccional',
+        'amount': 'Monto anómalo',
+        'movement_type': 'Tipo de movimiento',
+        'client_geo_risk': 'Jurisdicción Cliente',
+        'counterparty_geo_risk': 'Jurisdicción Contraparte',
+        'day_part': 'Horario Inusual'
+      };
+      
+      const featureCounts = {};
+      
+      recentTxs.forEach(tx => {
+        try {
+          const explanation = typeof tx.explanation === 'string' ? JSON.parse(tx.explanation) : tx.explanation;
+          if (explanation && explanation.top_risk_factors) {
+            explanation.top_risk_factors
+              .filter(f => f.impact === 'increases_risk')
+              .forEach(f => {
+                const mappedName = featureMap[f.feature] || f.feature;
+                featureCounts[mappedName] = (featureCounts[mappedName] || 0) + 1;
+              });
+          }
+        } catch (e) {
+          console.error('Error parsing explanation:', e);
+        }
+      });
+      
+      // Sort by count descending and take top 5
+      const sortedFeatures = Object.entries(featureCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+      
+      let factors = [];
+      let impacts = [];
+      
+      if (sortedFeatures.length > 0) {
+        factors = sortedFeatures.map(([name]) => name);
+        const totalCount = sortedFeatures.reduce((sum, [, count]) => sum + count, 0);
+        impacts = sortedFeatures.map(([, count]) => count / totalCount);
+      } else {
+        factors = ['Sin datos'];
+        impacts = [0];
+      }
+
+      const data = [{
+        type: "bar",
+        orientation: "h",
+        y: factors,
+        x: impacts,
+        marker: { 
+          color: impacts.map(v => v > 0.5 ? '#FF4B4B' : '#666'),
+        },
+        hovertemplate: "%{y}<br>Frecuencia: %{x:.2f}<extra></extra>",
+        text: impacts.map(v => v.toFixed(2)),
+        textposition: 'outside',
+        textfont: { color: '#FAFAFA', size: 11 }
+      }];
+
+      const layout = {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        margin: { l: 140, r: 40, t: 10, b: 30 },
+        xaxis: { 
+          tickcolor: "#AAB3C5", 
+          gridcolor: "rgba(43,52,68,.4)",
+          range: [0, 1],
+          tickfont: { size: 10 }
+        },
+        yaxis: { tickcolor: "#AAB3C5", tickfont: { size: 10 } },
+        font: { color: "#FAFAFA" },
+        height: 280
+      };
+
+      Plotly.newPlot("shapChart", data, layout, {displayModeBar: false, responsive: true});
+    }
+
+    // ---------------------------
+    // Graphviz (Viz.js)
+    // ---------------------------
+    async function renderGraphviz(){
+      if (!selectedClient || allTransactions.length === 0) {
+        const box = document.getElementById("graphvizBox");
+        box.innerHTML = '<div class="subtle">Seleccione un cliente para ver el grafo</div>';
+        return;
+      }
+
+      // Filter transactions from last 10 days
+      const tenDaysAgo = new Date();
+      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+      
+      const recentTxs = allTransactions.filter(tx => {
+        const txDate = new Date(tx.created_at);
+        return txDate >= tenDaysAgo;
+      });
+
+      if (recentTxs.length === 0) {
+        const box = document.getElementById("graphvizBox");
+        box.innerHTML = '<div class="subtle">No hay transacciones en los últimos 10 días</div>';
+        return;
+      }
+
+      // Get unique counterparties
+      const counterpartyIds = [...new Set(recentTxs.map(tx => tx.counterparty_account_id))];
+      
+      // Build nodes and edges
+      const clientName = selectedClient.person_type === 'Moral' 
+        ? selectedClient.first_name 
+        : `${selectedClient.first_name} ${selectedClient.last_name}`;
+      
+      let nodes = `CLIENTE [label="${clientName.replace(/"/g, '\\"')}", fillcolor="#FF4B4B", shape=circle, width=1.5, fontsize=10];\n`;
+      let edges = '';
+      
+      counterpartyIds.forEach((cpId, idx) => {
+        const cp = allCounterparties.find(c => c.account_id === cpId);
+        const cpName = cp ? cp.name.replace(/"/g, '\\"').substring(0, 30) : `CP${idx}`;
+        const cpCountry = cp ? cp.country : '';
+        const nodeId = `CP${idx}`;
+        
+        // Count transactions with this counterparty
+        const txCount = recentTxs.filter(tx => tx.counterparty_account_id === cpId).length;
+        const hasHighRisk = recentTxs.some(tx => tx.counterparty_account_id === cpId && (tx.risk_score || 0) >= 50);
+        const color = hasHighRisk ? '#FFA500' : '#00CC96';
+        
+        nodes += `${nodeId} [label="${cpName}\\n(${cpCountry})", fillcolor="${color}", shape=box, style="filled,rounded", fontcolor="black"];\n`;
+        
+        // Determine edge direction based on movement_type
+        const inTxs = recentTxs.filter(tx => tx.counterparty_account_id === cpId && tx.movement_type === 'IN');
+        const outTxs = recentTxs.filter(tx => tx.counterparty_account_id === cpId && tx.movement_type === 'OUT');
+        
+        if (inTxs.length > 0) {
+          edges += `${nodeId} -> CLIENTE [label="${inTxs.length}", color="${hasHighRisk ? '#FF4B4B' : '#00CC96'}", penwidth=2];\n`;
+        }
+        if (outTxs.length > 0) {
+          edges += `CLIENTE -> ${nodeId} [label="${outTxs.length}", color="${hasHighRisk ? '#FF4B4B' : '#00CC96'}", penwidth=2];\n`;
+        }
+      });
+
+      const dot = `
+        digraph G {
+          rankdir=LR;
+          bgcolor="transparent";
+          node [shape=circle, style=filled, fontname="Helvetica", fontsize=11, fontcolor="white"];
+          edge [color="#FF6B6B", penwidth=2];
+
+          ${nodes}
+          ${edges}
+        }
+      `;
+
+      const box = document.getElementById("graphvizBox");
+      box.innerHTML = "";
+
+      try{
+        const viz = new Viz();
+        const svg = await viz.renderSVGElement(dot);
+        box.appendChild(svg);
+        
+        // Update risky connections count
+        const riskyCount = counterpartyIds.filter(cpId => {
+          return recentTxs.some(tx => tx.counterparty_account_id === cpId && (tx.risk_score || 0) >= 50);
+        }).length;
+        
+        const riskyConnectionsEl = document.getElementById('riskyConnections');
+        if (riskyCount > 0) {
+          riskyConnectionsEl.innerHTML = `Conexiones riesgosas: <strong style="color:var(--risk);">${riskyCount}</strong>`;
+          document.getElementById('graphBadge').style.display = 'block';
+        } else {
+          riskyConnectionsEl.innerHTML = '';
+          document.getElementById('graphBadge').style.display = 'none';
+        }
+      } catch(e){
+        box.innerHTML = `<div class="subtle">No se pudo renderizar el grafo. Error: ${String(e)}</div>`;
+        document.getElementById('riskyConnections').innerHTML = '';
+        document.getElementById('graphBadge').style.display = 'none';
+      }
+    }
+
+    // ---------------------------
+    // “Last update” clock
+    // ---------------------------
+    function tickClock(){
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2,"0");
+      const mm = String(now.getMinutes()).padStart(2,"0");
+      const ss = String(now.getSeconds()).padStart(2,"0");
+      document.getElementById("lastUpdate").textContent = `${hh}:${mm}:${ss}`;
+    }
+
+    // Init
+    loadClients();
+    loadCounterparties();
+    connectWebSocket();
+    loadRecentTransactions();
+    renderGauge();
+    renderShap();
+    renderGraphviz();
+    tickClock();
+    setInterval(tickClock, 1000);
+
+    // Re-render on resize for responsiveness
+    window.addEventListener("resize", () => {
+      Plotly.Plots.resize("gaugeChart");
+      Plotly.Plots.resize("shapChart");
+    });
+  </script>
+</body>
+</html>
