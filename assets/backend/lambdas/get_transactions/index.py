@@ -23,8 +23,12 @@ def handler(event, context):
         account_id = query_params.get("account_id")
 
         if account_id:
+            print(f"Filtering transactions by account_id: {account_id}")
             response = table.scan(
                 FilterExpression=Attr("client_account_id").eq(account_id)
+            )
+            print(
+                f"Found {len(response.get('Items', []))} transactions for account_id: {account_id}"
             )
         else:
             response = table.scan()

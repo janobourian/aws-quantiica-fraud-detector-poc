@@ -645,14 +645,32 @@
     }
 
     // ---------------------------
-    // Load Client Transactions
+    // Calculate Weighted Average
     // ---------------------------
+    function calculateWeightedAverage(transactions, riskWeight = 6, safeWeight = 1) {
+      const weightedTransactions = transactions.map(transaction => {
+        const weight = transaction.risk_prediction === 'true' || transaction.risk_prediction === true ? riskWeight : safeWeight;
+        return parseFloat(transaction.risk_score || 0) * weight;
+      });
+
+      const totalWeights = transactions.reduce((sum, transaction) => {
+        const weight = transaction.risk_prediction === 'true' || transaction.risk_prediction === true ? riskWeight : safeWeight;
+        return sum + weight;
+      }, 0);
+
+      const weightedSum = weightedTransactions.reduce((sum, weightedScore) => sum + weightedScore, 0);
+
+      return totalWeights > 0 ? weightedSum / totalWeights : 0;
+    }
     async function loadClientTransactions(accountId) {
       console.log('Loading transactions for account_id:', accountId);
       try {
         const response = await fetch(`${API_URL}/transactions?account_id=${accountId}`);
         const data = await response.json();
         console.log('Transactions API response:', data);
+        console.log('First transaction client_account_id:', data.transactions[0]?.client_account_id);
+        console.log('Requested account_id:', accountId);
+        console.log('Match?', data.transactions[0]?.client_account_id === accountId);
         
         // Sort by created_at descending (latest first)
         const sortedTransactions = data.transactions
@@ -1057,13 +1075,13 @@
     // Charts (Plotly)
     // ---------------------------
     function renderGauge(){
-      // Calculate 30-day mean risk score from all transactions (not just ANALYZED)
+      // Calculate weighted average risk score from all transactions with risk_score
       const recentTxs = allTransactions.filter(tx => tx.risk_score != null);
       
       let meanRiskScore = 0;
       if (recentTxs.length > 0) {
-        const totalRisk = recentTxs.reduce((sum, tx) => sum + (parseFloat(tx.risk_score) || 0), 0);
-        meanRiskScore = Math.round((totalRisk / recentTxs.length) * 100); // Convert to 0-100 scale
+        const weightedAvg = calculateWeightedAverage(recentTxs);
+        meanRiskScore = Math.round(weightedAvg * 100); // Convert to 0-100 scale
       }
       
       const barColor = meanRiskScore >= 75 ? '#FF4B4B' : meanRiskScore >= 50 ? '#FFA500' : '#00CC96';
