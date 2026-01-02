@@ -19,6 +19,7 @@ class ApiIntegrationStack(Stack):
         post_client_lambda: _lambda.Function,
         get_clients_lambda: _lambda.Function,
         post_transaction_lambda: _lambda.Function,
+        post_transaction_batch_lambda: _lambda.Function,
         get_transactions_lambda: _lambda.Function,
         post_counterparty_lambda: _lambda.Function,
         get_counterparties_lambda: _lambda.Function,
@@ -91,6 +92,28 @@ class ApiIntegrationStack(Stack):
             target=f"integrations/{post_transaction_integration.ref}",
         )
         post_transaction_lambda.add_permission(
+            "ApiGatewayInvoke",
+            principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{http_api_id}/*/*",
+        )
+
+        # POST /transactions/batch
+        post_transaction_batch_integration = apigwv2.CfnIntegration(
+            self,
+            "PostTransactionBatchIntegration",
+            api_id=http_api_id,
+            integration_type="AWS_PROXY",
+            integration_uri=post_transaction_batch_lambda.function_arn,
+            payload_format_version="2.0",
+        )
+        apigwv2.CfnRoute(
+            self,
+            "PostTransactionBatchRoute",
+            api_id=http_api_id,
+            route_key="POST /transactions/batch",
+            target=f"integrations/{post_transaction_batch_integration.ref}",
+        )
+        post_transaction_batch_lambda.add_permission(
             "ApiGatewayInvoke",
             principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
             source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{http_api_id}/*/*",
