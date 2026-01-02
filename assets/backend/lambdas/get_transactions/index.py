@@ -20,11 +20,11 @@ def handler(event, context):
     print(f"Context: {context}")
     try:
         query_params = event.get("queryStringParameters") or {}
-        client_id = query_params.get("client_id")
+        account_id = query_params.get("account_id")
 
-        if client_id:
+        if account_id:
             response = table.scan(
-                FilterExpression=Attr("client_account_id").eq(client_id)
+                FilterExpression=Attr("client_account_id").eq(account_id)
             )
         else:
             response = table.scan()

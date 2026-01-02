@@ -582,7 +582,7 @@
             document.getElementById('clientSearch').value = name;
             selectedClient = client;
             updateKYCProfile(client);
-            loadClientTransactions(client.client_id);
+            loadClientTransactions(client.account_id);
             dropdown.classList.remove('show');
           }
         });
@@ -648,16 +648,26 @@
     // Load Client Transactions
     // ---------------------------
     async function loadClientTransactions(accountId) {
-      console.log('Loading transactions for client_id:', accountId);
+      console.log('Loading transactions for account_id:', accountId);
       try {
-        const response = await fetch(`${API_URL}/transactions?client_id=${accountId}`);
+        const response = await fetch(`${API_URL}/transactions?account_id=${accountId}`);
         const data = await response.json();
         console.log('Transactions API response:', data);
         
-        allTransactions = data.transactions
+        // Sort by created_at descending (latest first)
+        const sortedTransactions = data.transactions
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         
-        console.log('Sorted transactions:', allTransactions.length);
+        // Filter last 30 days
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        allTransactions = sortedTransactions.filter(tx => {
+          const txDate = new Date(tx.created_at);
+          return txDate >= thirtyDaysAgo;
+        });
+        
+        console.log('Filtered transactions (30 days):', allTransactions.length);
         
         displayedTransactions = 0;
         document.getElementById('recentTransactions').innerHTML = '';
@@ -684,11 +694,15 @@
     function loadClientAlerts() {
       const alertsContainer = document.getElementById('staticAlerts');
       
-      // Filter transactions with risk_score >= 30 and status ANALYZED
+      console.log('Loading alerts for transactions:', allTransactions.length);
+      console.log('Sample transactions:', allTransactions.slice(0, 3));
+      
+      // Filter transactions with risk_score >= 0.5
       const alerts = allTransactions
-        .filter(tx => tx.status === 'ANALYZED' && (tx.risk_score || 0) >= 30)
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .filter(tx => (tx.risk_score || 0) >= 0.5)
         .slice(0, 10);
+      
+      console.log('Filtered alerts:', alerts.length);
       
       if (alerts.length === 0) {
         alertsContainer.innerHTML = '<div class="subtle text-center py-2">No hay alertas para este cliente</div>';
@@ -714,21 +728,22 @@
           'day_part': 'Horario Inusual'
         };
         
-        let features = [];
+        let explanationText = '';
         try {
           const explanation = typeof tx.explanation === 'string' ? JSON.parse(tx.explanation) : tx.explanation;
           if (explanation && explanation.top_risk_factors) {
-            features = explanation.top_risk_factors
+            const topFactors = explanation.top_risk_factors
               .filter(f => f.impact === 'increases_risk')
               .sort((a, b) => b.magnitude - a.magnitude)
-              .map(f => featureMap[f.feature] || f.feature)
-              .join(' | ');
+              .slice(0, 3)
+              .map(f => featureMap[f.feature] || f.feature);
+            explanationText = topFactors.join(' | ');
           }
         } catch (e) {
           console.error('Error parsing explanation:', e);
         }
         
-        const title = features || 'Concentración / Jurisdicción Riesgo';
+        const title = explanationText || 'Concentración / Jurisdicción Riesgo';
         const amount = parseFloat(tx.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         const action = tx.movement_type === 'IN' ? 'Recibió' : 'Envió';
         const preposition = tx.movement_type === 'IN' ? 'de' : 'a';
@@ -824,7 +839,7 @@
               console.log('Fetched transaction amount:', transaction.amount, 'Formatted:', amount);
               
               // Add to allTransactions if it's for the current client
-              if (selectedClient && transaction.client_account_id === selectedClient.client_id) {
+              if (selectedClient && transaction.client_account_id === selectedClient.account_id) {
                 allTransactions.unshift(transaction);
                 // Refresh the transactions table
                 const tbody = document.getElementById('recentTransactions');
@@ -868,7 +883,7 @@
         
         // Check if transaction belongs to selected client
         const isClientTransaction = selectedClient && 
-                                   data.client_account_id === selectedClient.client_id;
+                                   data.client_account_id === selectedClient.account_id;
         
         // Fetch full transaction if explanation is missing
         const fetchAndUpdate = async () => {
@@ -876,7 +891,7 @@
           
           if (!data.explanation && isClientTransaction) {
             try {
-              const response = await fetch(`${API_URL}/transactions?client_id=${selectedClient.client_id}`);
+              const response = await fetch(`${API_URL}/transactions?account_id=${selectedClient.account_id}`);
               const result = await response.json();
               const fullTx = result.transactions.find(tx => tx.transaction_id === data.transaction_id);
               if (fullTx) {
@@ -1042,19 +1057,13 @@
     // Charts (Plotly)
     // ---------------------------
     function renderGauge(){
-      // Calculate 30-day mean risk score
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const recentTxs = allTransactions.filter(tx => {
-        const txDate = new Date(tx.created_at);
-        return txDate >= thirtyDaysAgo && tx.status === 'ANALYZED' && tx.risk_score != null;
-      });
+      // Calculate 30-day mean risk score from all transactions (not just ANALYZED)
+      const recentTxs = allTransactions.filter(tx => tx.risk_score != null);
       
       let meanRiskScore = 0;
       if (recentTxs.length > 0) {
-        const totalRisk = recentTxs.reduce((sum, tx) => sum + (tx.risk_score || 0), 0);
-        meanRiskScore = Math.round(totalRisk / recentTxs.length);
+        const totalRisk = recentTxs.reduce((sum, tx) => sum + (parseFloat(tx.risk_score) || 0), 0);
+        meanRiskScore = Math.round((totalRisk / recentTxs.length) * 100); // Convert to 0-100 scale
       }
       
       const barColor = meanRiskScore >= 75 ? '#FF4B4B' : meanRiskScore >= 50 ? '#FFA500' : '#00CC96';
@@ -1090,14 +1099,8 @@
     }
 
     function renderShap(){
-      // Calculate feature frequency from 30-day transactions
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const recentTxs = allTransactions.filter(tx => {
-        const txDate = new Date(tx.created_at);
-        return txDate >= thirtyDaysAgo && tx.status === 'ANALYZED' && tx.explanation;
-      });
+      // Count features from alerts (transactions with risk_score >= 0.5)
+      const alertTxs = allTransactions.filter(tx => (parseFloat(tx.risk_score) || 0) >= 0.5);
       
       const featureMap = {
         'unique_cp_1d': 'Múltiples ordenantes',
@@ -1113,7 +1116,7 @@
       
       const featureCounts = {};
       
-      recentTxs.forEach(tx => {
+      alertTxs.forEach(tx => {
         try {
           const explanation = typeof tx.explanation === 'string' ? JSON.parse(tx.explanation) : tx.explanation;
           if (explanation && explanation.top_risk_factors) {
@@ -1139,8 +1142,9 @@
       
       if (sortedFeatures.length > 0) {
         factors = sortedFeatures.map(([name]) => name);
+        // Convert counts to percentages (0-100 scale)
         const totalCount = sortedFeatures.reduce((sum, [, count]) => sum + count, 0);
-        impacts = sortedFeatures.map(([, count]) => count / totalCount);
+        impacts = sortedFeatures.map(([, count]) => (count / totalCount) * 100);
       } else {
         factors = ['Sin datos'];
         impacts = [0];
@@ -1155,7 +1159,7 @@
           color: impacts.map(v => v > 0.5 ? '#FF4B4B' : '#666'),
         },
         hovertemplate: "%{y}<br>Frecuencia: %{x:.2f}<extra></extra>",
-        text: impacts.map(v => v.toFixed(2)),
+        text: impacts.map(v => v.toFixed(1) + '%'),
         textposition: 'outside',
         textfont: { color: '#FAFAFA', size: 11 }
       }];
@@ -1167,8 +1171,9 @@
         xaxis: { 
           tickcolor: "#AAB3C5", 
           gridcolor: "rgba(43,52,68,.4)",
-          range: [0, 1],
-          tickfont: { size: 10 }
+          range: [0, 100],
+          tickfont: { size: 10 },
+          ticksuffix: '%'
         },
         yaxis: { tickcolor: "#AAB3C5", tickfont: { size: 10 } },
         font: { color: "#FAFAFA" },
@@ -1188,23 +1193,17 @@
         return;
       }
 
-      // Filter transactions from last 10 days
-      const tenDaysAgo = new Date();
-      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
-      
-      const recentTxs = allTransactions.filter(tx => {
-        const txDate = new Date(tx.created_at);
-        return txDate >= tenDaysAgo;
-      });
+      // Use transactions with risk_score >= 0.5 from the already filtered 30-day period
+      const riskTxs = allTransactions.filter(tx => (tx.risk_score || 0) >= 0.5);
 
-      if (recentTxs.length === 0) {
+      if (riskTxs.length === 0) {
         const box = document.getElementById("graphvizBox");
-        box.innerHTML = '<div class="subtle">No hay transacciones en los últimos 10 días</div>';
+        box.innerHTML = '<div class="subtle">No hay transacciones de riesgo en los últimos 30 días</div>';
         return;
       }
 
-      // Get unique counterparties
-      const counterpartyIds = [...new Set(recentTxs.map(tx => tx.counterparty_account_id))];
+      // Get unique counterparties from risky transactions
+      const counterpartyIds = [...new Set(riskTxs.map(tx => tx.counterparty_account_id))];
       
       // Build nodes and edges
       const clientName = selectedClient.person_type === 'Moral' 
@@ -1220,16 +1219,16 @@
         const cpCountry = cp ? cp.country : '';
         const nodeId = `CP${idx}`;
         
-        // Count transactions with this counterparty
-        const txCount = recentTxs.filter(tx => tx.counterparty_account_id === cpId).length;
-        const hasHighRisk = recentTxs.some(tx => tx.counterparty_account_id === cpId && (tx.risk_score || 0) >= 50);
+        // Count risky transactions with this counterparty
+        const txCount = riskTxs.filter(tx => tx.counterparty_account_id === cpId).length;
+        const hasHighRisk = true; // All transactions are already >= 0.5 risk score
         const color = hasHighRisk ? '#FFA500' : '#00CC96';
         
         nodes += `${nodeId} [label="${cpName}\\n(${cpCountry})", fillcolor="${color}", shape=box, style="filled,rounded", fontcolor="black"];\n`;
         
-        // Determine edge direction based on movement_type
-        const inTxs = recentTxs.filter(tx => tx.counterparty_account_id === cpId && tx.movement_type === 'IN');
-        const outTxs = recentTxs.filter(tx => tx.counterparty_account_id === cpId && tx.movement_type === 'OUT');
+        // Determine edge direction based on movement_type from risky transactions
+        const inTxs = riskTxs.filter(tx => tx.counterparty_account_id === cpId && tx.movement_type === 'IN');
+        const outTxs = riskTxs.filter(tx => tx.counterparty_account_id === cpId && tx.movement_type === 'OUT');
         
         if (inTxs.length > 0) {
           edges += `${nodeId} -> CLIENTE [label="${inTxs.length}", color="${hasHighRisk ? '#FF4B4B' : '#00CC96'}", penwidth=2];\n`;
@@ -1260,9 +1259,7 @@
         box.appendChild(svg);
         
         // Update risky connections count
-        const riskyCount = counterpartyIds.filter(cpId => {
-          return recentTxs.some(tx => tx.counterparty_account_id === cpId && (tx.risk_score || 0) >= 50);
-        }).length;
+        const riskyCount = counterpartyIds.length; // All counterparties are risky
         
         const riskyConnectionsEl = document.getElementById('riskyConnections');
         if (riskyCount > 0) {
