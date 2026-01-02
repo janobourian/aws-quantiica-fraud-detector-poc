@@ -70,6 +70,21 @@ class LambdaStack(Stack):
             },
         )
 
+        # POST Transaction Lambda
+        post_transaction_batch_lambda = _lambda.Function(
+            self,
+            "PostTransactionBatchFunction",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            handler="index.handler",
+            code=_lambda.Code.from_asset("assets/backend/lambdas/post_transaction_batch"),
+            function_name=f"{project_prefix}-post-transaction-batch-{environment}".lower(),
+            timeout=Duration.seconds(30),
+            environment={
+                "TRANSACTIONS_TABLE_NAME": transactions_table_name,
+                "ENVIRONMENT": environment,
+            },
+        )
+
         # GET Transactions Lambda
         get_transactions_lambda = _lambda.Function(
             self,
@@ -102,6 +117,13 @@ class LambdaStack(Stack):
         )
 
         post_transaction_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["dynamodb:PutItem", "dynamodb:BatchWriteItem"],
+                resources=[transactions_table_arn],
+            )
+        )
+
+        post_transaction_batch_lambda.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["dynamodb:PutItem"],
                 resources=[transactions_table_arn],
@@ -255,6 +277,7 @@ class LambdaStack(Stack):
         self.post_client_lambda = post_client_lambda
         self.get_clients_lambda = get_clients_lambda
         self.post_transaction_lambda = post_transaction_lambda
+        self.post_transaction_batch_lambda = post_transaction_batch_lambda
         self.get_transactions_lambda = get_transactions_lambda
         self.post_counterparty_lambda = post_counterparty_lambda
         self.get_counterparties_lambda = get_counterparties_lambda
