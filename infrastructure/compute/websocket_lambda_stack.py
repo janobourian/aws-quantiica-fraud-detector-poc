@@ -91,6 +91,7 @@ class WebSocketLambdaStack(Stack):
                 "SQS_QUEUE_URL": input_queue_url,
                 "WEBSOCKET_ENDPOINT": websocket_endpoint,
                 "CONNECTIONS_TABLE_NAME": connections_table_name,
+                "TRANSACTIONS_TABLE_NAME": transactions_table_name,
             },
         )
 
