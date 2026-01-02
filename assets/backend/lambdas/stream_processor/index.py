@@ -60,9 +60,9 @@ def handler(event, context):
                     )
                     transaction_data["status"] = "ANALYZED"
 
-                    if float(transaction_data["risk_score"]) < 0.5:
+                    if int(transaction_data["risk_score"]) < 50:
                         print(
-                            f"Transaction {transaction_data['transaction_id']} has risk_score < 0.5, not sending to Websocket."
+                            f"Transaction {transaction_data['transaction_id']} has risk_score < 50, not sending to Websocket."
                         )
                         continue
                     
@@ -70,7 +70,7 @@ def handler(event, context):
                         "type": "analyzed_transaction",
                         "status": "ANALYZED",
                         "transaction_id": transaction_data["transaction_id"],
-                        "risk_score": float(transaction_data["risk_score"]),
+                        "risk_score": int(transaction_data["risk_score"]),
                         "risk_prediction": transaction_data["risk_prediction"],
                         "client_account_id": transaction_data.get("client_account_id", ""),
                         "amount": float(transaction_data.get("amount", 0)),
