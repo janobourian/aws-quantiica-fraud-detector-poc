@@ -151,6 +151,7 @@ api_integration_stack = ApiIntegrationStack(
     post_client_lambda=lambda_stack.post_client_lambda,
     get_clients_lambda=lambda_stack.get_clients_lambda,
     post_transaction_lambda=lambda_stack.post_transaction_lambda,
+    post_transaction_batch_lambda=lambda_stack.post_transaction_batch_lambda,
     get_transactions_lambda=lambda_stack.get_transactions_lambda,
     post_counterparty_lambda=lambda_stack.post_counterparty_lambda,
     get_counterparties_lambda=lambda_stack.get_counterparties_lambda,
