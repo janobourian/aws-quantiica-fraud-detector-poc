@@ -149,6 +149,12 @@ class WebSocketLambdaStack(Stack):
 
         stream_processor_lambda.add_to_role_policy(
             iam.PolicyStatement(
+                actions=["dynamodb:UpdateItem"],
+                resources=[transactions_table_arn],
+            )
+        )
+        stream_processor_lambda.add_to_role_policy(
+            iam.PolicyStatement(
                 actions=["sqs:SendMessage"],
                 resources=[input_queue_arn],
             )
