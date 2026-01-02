@@ -43,8 +43,15 @@ def handler(event, context):
                 # Debug: Print parsed amount
                 print(f"Parsed amount: {transaction_data['amount']}")
 
+                # Send to SQS
+                if transaction_data["status"] != "STARTED":
+                    print(
+                        f"Transaction {transaction_data['transaction_id']} already processed with status {transaction_data['status']}. Skipping SQS send."
+                    )
+                    continue
+                
                 # If the transaction has a risk score, update its status to ANALYZED
-                if transaction_data["risk_score"]:
+                if transaction_data["risk_score"] is not None:
                     transactions_table.update_item(
                         Key={"transaction_id": transaction_data["transaction_id"]},
                         UpdateExpression="SET #status = :status",
@@ -53,8 +60,23 @@ def handler(event, context):
                     )
                     transaction_data["status"] = "ANALYZED"
 
-                # Send to SQS
-                if transaction_data["status"] == "STARTED":
+                    if float(transaction_data["risk_score"]) < 0.5:
+                        print(
+                            f"Transaction {transaction_data['transaction_id']} has risk_score < 0.5, not sending to Websocket."
+                        )
+                        continue
+                    
+                    broadcast_message = {
+                        "type": "analyzed_transaction",
+                        "status": "ANALYZED",
+                        "transaction_id": transaction_data["transaction_id"],
+                        "risk_score": float(transaction_data["risk_score"]),
+                        "risk_prediction": transaction_data["risk_prediction"],
+                        "client_account_id": transaction_data.get("client_account_id", ""),
+                        "amount": float(transaction_data.get("amount", 0)),
+                    }
+
+                else:
                     sqs.send_message(
                         QueueUrl=queue_url,
                         MessageBody=json.dumps(transaction_data),
@@ -62,20 +84,20 @@ def handler(event, context):
                         MessageDeduplicationId=transaction_data["transaction_id"],
                     )
 
-                # Broadcast to WebSocket clients
-                broadcast_message = {
-                    "type": "new_transaction",
-                    "status": "STARTED",
-                    "transaction_id": transaction_data["transaction_id"],
-                    "amount": transaction_data["amount"],
-                    "client_account_id": transaction_data["client_account_id"],
-                    "counterparty_account_id": transaction_data[
-                        "counterparty_account_id"
-                    ],
-                    "created_at": transaction_data["created_at"],
-                    "movement_type": transaction_data["movement_type"],
-                    "tx_type": transaction_data["tx_type"],
-                }
+                    # Broadcast to WebSocket clients
+                    broadcast_message = {
+                        "type": "new_transaction",
+                        "status": "STARTED",
+                        "transaction_id": transaction_data["transaction_id"],
+                        "amount": transaction_data["amount"],
+                        "client_account_id": transaction_data["client_account_id"],
+                        "counterparty_account_id": transaction_data[
+                            "counterparty_account_id"
+                        ],
+                        "created_at": transaction_data["created_at"],
+                        "movement_type": transaction_data["movement_type"],
+                        "tx_type": transaction_data["tx_type"],
+                    }
 
                 # Debug: Print broadcast message
                 print(f"Broadcasting message: {json.dumps(broadcast_message)}")
