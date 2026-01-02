@@ -50,7 +50,7 @@ def handler(event, context):
             "body": json.dumps(
                 {
                     "message": "Transaction created",
-                    "transaction_id": transaction_data["transaction_id"],
+                    "transactions_length": len(body.get("transactions", [])),
                 }
             ),
         }
