@@ -35,11 +35,17 @@ def handler(event, context):
                     ).get("S", ""),
                     "amount": float(new_image.get("amount", {}).get("N", "0")),
                     "created_at": new_image.get("created_at", {}).get("S", ""),
-                    "status": new_image.get("status", {}).get("S", "STARTED"),
+                    "risk_score": float(new_image.get("risk_score", {}).get("N", "0")),
+                    "risk_prediction": new_image.get("risk_prediction", {}).get(
+                        "S", ""
+                    ),
                 }
 
                 # Debug: Print parsed amount
                 print(f"Parsed amount: {transaction_data['amount']}")
+                transaction_data["status"] = (
+                    "ANALYZED" if transaction_data["risk_prediction"] else "STARTED"
+                )
 
                 # Send to SQS
                 if transaction_data["status"] == "STARTED":
@@ -50,24 +56,24 @@ def handler(event, context):
                         MessageDeduplicationId=transaction_data["transaction_id"],
                     )
 
-                # Broadcast to WebSocket clients
-                broadcast_message = {
-                    "type": "new_transaction",
-                    "status": "STARTED",
-                    "transaction_id": transaction_data["transaction_id"],
-                    "amount": transaction_data["amount"],
-                    "client_account_id": transaction_data["client_account_id"],
-                    "counterparty_account_id": transaction_data[
-                        "counterparty_account_id"
-                    ],
-                    "created_at": transaction_data["created_at"],
-                    "movement_type": transaction_data["movement_type"],
-                    "tx_type": transaction_data["tx_type"],
-                }
+                    # Broadcast to WebSocket clients
+                    broadcast_message = {
+                        "type": "new_transaction",
+                        "status": "STARTED",
+                        "transaction_id": transaction_data["transaction_id"],
+                        "amount": transaction_data["amount"],
+                        "client_account_id": transaction_data["client_account_id"],
+                        "counterparty_account_id": transaction_data[
+                            "counterparty_account_id"
+                        ],
+                        "created_at": transaction_data["created_at"],
+                        "movement_type": transaction_data["movement_type"],
+                        "tx_type": transaction_data["tx_type"],
+                    }
 
-                # Debug: Print broadcast message
-                print(f"Broadcasting message: {json.dumps(broadcast_message)}")
-                broadcast_to_clients(broadcast_message)
+                    # Debug: Print broadcast message
+                    print(f"Broadcasting message: {json.dumps(broadcast_message)}")
+                    broadcast_to_clients(broadcast_message)
 
         return {"statusCode": 200}
     except Exception as e:
