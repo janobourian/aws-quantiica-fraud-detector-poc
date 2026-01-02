@@ -34,6 +34,9 @@ def handler(event, context):
             "risk_prediction": body.get("risk_prediction", False),
         }
 
+        if transaction_data["risk_score"] is not None:
+            transaction_data["risk_score"] = int(float(transaction_data["risk_score"])*100)
+
         table.put_item(Item=transaction_data)
 
         return {
