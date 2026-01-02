@@ -7,6 +7,7 @@ apigateway = boto3.client(
     "apigatewaymanagementapi", endpoint_url=os.environ["WEBSOCKET_ENDPOINT"]
 )
 dynamodb = boto3.resource("dynamodb")
+transactions_table = dynamodb.Table(os.environ["TRANSACTIONS_TABLE_NAME"])
 connections_table = dynamodb.Table(os.environ["CONNECTIONS_TABLE_NAME"])
 
 queue_url = os.environ["SQS_QUEUE_URL"]
@@ -36,10 +37,21 @@ def handler(event, context):
                     "amount": float(new_image.get("amount", {}).get("N", "0")),
                     "created_at": new_image.get("created_at", {}).get("S", ""),
                     "status": new_image.get("status", {}).get("S", "STARTED"),
+                    "risk_score": new_image.get("risk_score", {}).get("N", None),
                 }
 
                 # Debug: Print parsed amount
                 print(f"Parsed amount: {transaction_data['amount']}")
+
+                # If the transaction has a risk score, update its status to ANALYZED
+                if transaction_data["risk_score"]:
+                    transactions_table.update_item(
+                        Key={"transaction_id": transaction_data["transaction_id"]},
+                        UpdateExpression="SET #status = :status",
+                        ExpressionAttributeNames={"#status": "status"},
+                        ExpressionAttributeValues={":status": "ANALYZED"},
+                    )
+                    transaction_data["status"] = "ANALYZED"
 
                 # Send to SQS
                 if transaction_data["status"] == "STARTED":
