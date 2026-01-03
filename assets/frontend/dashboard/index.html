@@ -383,7 +383,7 @@
       <div class="row g-3">
         <div class="col-12 col-md-6">
           <div class="panel-card">
-            <div class="panel-title">📊 Todas las Transacciones</div>
+            <div class="panel-title">📊 Transacciones sin alerta</div>
             <div id="allTransactions" style="max-height:300px;overflow-y:auto;">
               <div class="subtle text-center py-2">Esperando transacciones...</div>
             </div>
@@ -391,7 +391,7 @@
         </div>
         <div class="col-12 col-md-6">
           <div class="panel-card">
-            <div class="panel-title">🔴 Alertas en Tiempo Real</div>
+            <div class="panel-title">🔴 Transacciones con alerta</div>
             <div id="realtimeAlerts" style="max-height:300px;overflow-y:auto;">
               <div class="subtle text-center py-2">Esperando transacciones...</div>
             </div>
@@ -896,8 +896,7 @@
           })
           .catch(err => console.error('Error fetching transaction:', err));
       } else if (data.type === 'analyzed_transaction') {
-        // Only show if risk_score >= 50
-        if (data.risk_score < 50) return;
+        // Only show ANALYZED transactions
         
         // Check if transaction belongs to selected client
         const isClientTransaction = selectedClient && 
@@ -920,7 +919,56 @@
             }
           }
           
-          // Update transaction in allTransactions array
+          // Show in "Transacciones con alerta" section for ALL ANALYZED transactions with risk_score >= 0.5
+          if (data.risk_score >= 0.5) {
+            const alertsDiv = document.getElementById('realtimeAlerts');
+            const isHighRisk = data.risk_prediction === true || data.risk_score >= 0.75;
+            const alertClass = isHighRisk ? 'alert-risk' : 'alert-warn';
+            const icon = isHighRisk ? '🔴' : '🟡';
+            const amount = parseFloat(data.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            
+            const alertHtml = `
+              <div class="alert-card ${alertClass}" style="animation: fadeIn 0.3s;cursor:pointer;" onclick="showTxDetail('${data.transaction_id}')">
+                <div style="font-weight:700;font-size:11px;">${icon} Transacción Analizada - ${now}</div>
+                <div class="subtle">Score: ${data.risk_score} | $${amount} | ID: ${data.transaction_id?.substring(0,8)}...</div>
+              </div>
+            `;
+            
+            const emptyState = alertsDiv.querySelector('.subtle.text-center');
+            if (emptyState) {
+              alertsDiv.innerHTML = alertHtml;
+            } else {
+              alertsDiv.insertAdjacentHTML('afterbegin', alertHtml);
+            }
+            
+            const alerts = alertsDiv.querySelectorAll('.alert-card');
+            if (alerts.length > 15) alerts[alerts.length - 1].remove();
+          }
+          
+          // Show in "Transacciones sin alerta" section for ALL ANALYZED transactions with risk_score < 0.5
+          if (data.risk_score < 0.5) {
+            const allTxDiv = document.getElementById('allTransactions');
+            const amount = parseFloat(data.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            
+            const txHtml = `
+              <div class="alert-card alert-ok" style="animation: fadeIn 0.3s;cursor:pointer;" onclick="showTxDetail('${data.transaction_id}')">
+                <div style="font-weight:700;font-size:11px;">🟢 Analizada - ${now}</div>
+                <div class="subtle">Score: ${data.risk_score} | $${amount} | ID: ${data.transaction_id?.substring(0,8)}...</div>
+              </div>
+            `;
+            
+            const emptyState = allTxDiv.querySelector('.subtle.text-center');
+            if (emptyState) {
+              allTxDiv.innerHTML = txHtml;
+            } else {
+              allTxDiv.insertAdjacentHTML('afterbegin', txHtml);
+            }
+            
+            const txs = allTxDiv.querySelectorAll('.alert-card');
+            if (txs.length > 15) txs[txs.length - 1].remove();
+          }
+          
+          // Update client-specific data only if transaction belongs to selected client
           if (isClientTransaction) {
             const txIndex = allTransactions.findIndex(tx => tx.transaction_id === data.transaction_id);
             if (txIndex !== -1) {
@@ -942,55 +990,7 @@
             // Update charts with new data
             renderGauge();
             renderShap();
-            
-            // Show in "Alertas en Tiempo Real" section
-            const alertsDiv = document.getElementById('realtimeAlerts');
-            const isHighRisk = data.risk_prediction === true || data.risk_score >= 75;
-            const alertClass = isHighRisk ? 'alert-risk' : 'alert-warn';
-            const icon = isHighRisk ? '🔴' : '🟡';
-            const amount = parseFloat(data.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            
-            const alertHtml = `
-              <div class="alert-card ${alertClass}" style="animation: fadeIn 0.3s;cursor:pointer;" onclick="showTxDetail('${data.transaction_id}')">
-                <div style="font-weight:700;font-size:11px;">${icon} Transacción Analizada - ${now}</div>
-                <div class="subtle">Score: ${data.risk_score} | $${amount} | ID: ${data.transaction_id?.substring(0,8)}...</div>
-              </div>
-            `;
-            
-            const emptyState = alertsDiv.querySelector('.subtle.text-center');
-            if (emptyState) {
-              alertsDiv.innerHTML = alertHtml;
-            } else {
-              alertsDiv.insertAdjacentHTML('afterbegin', alertHtml);
-            }
-            
-            const alerts = alertsDiv.querySelectorAll('.alert-card');
-            if (alerts.length > 5) alerts[alerts.length - 1].remove();
           }
-          
-          // Always show in "All Transactions" section
-          const allTxDiv = document.getElementById('allTransactions');
-          const isHighRisk = data.risk_prediction === true || data.risk_score >= 75;
-          const alertClass = isHighRisk ? 'alert-risk' : 'alert-warn';
-          const icon = isHighRisk ? '🔴' : '🟡';
-          const amount = parseFloat(data.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-          
-          const txHtml = `
-            <div class="alert-card ${alertClass}" style="animation: fadeIn 0.3s;cursor:pointer;" onclick="showTxDetail('${data.transaction_id}')">
-              <div style="font-weight:700;font-size:11px;">${icon} Analizada - ${now}</div>
-              <div class="subtle">Score: ${data.risk_score} | $${amount} | ID: ${data.transaction_id?.substring(0,8)}...</div>
-            </div>
-          `;
-          
-          const emptyState = allTxDiv.querySelector('.subtle.text-center');
-          if (emptyState) {
-            allTxDiv.innerHTML = txHtml;
-          } else {
-            allTxDiv.insertAdjacentHTML('afterbegin', txHtml);
-          }
-          
-          const txs = allTxDiv.querySelectorAll('.alert-card');
-          if (txs.length > 5) txs[txs.length - 1].remove();
         };
         
         fetchAndUpdate();
@@ -1019,11 +1019,74 @@
     // Transaction Detail Modal
     // ---------------------------
     function showTxDetail(txId) {
-      const tx = allTransactions.find(t => t.transaction_id === txId);
-      if (!tx) return;
-
+      // First try to find in allTransactions array
+      let tx = allTransactions.find(t => t.transaction_id === txId);
+      
+      // If not found, try to fetch from API
+      if (!tx) {
+        fetch(`${API_URL}/transactions`)
+          .then(r => r.json())
+          .then(response => {
+            tx = response.transactions.find(t => t.transaction_id === txId);
+            if (tx) {
+              displayTransactionModal(tx);
+            }
+          })
+          .catch(err => console.error('Error fetching transaction:', err));
+        return;
+      }
+      
+      displayTransactionModal(tx);
+    }
+    
+    function displayTransactionModal(tx) {
       const counterparty = allCounterparties.find(cp => cp.account_id === tx.counterparty_account_id);
       const amount = parseFloat(tx.amount || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      
+      // Generate alert-style information for high-risk transactions
+      let alertSection = '';
+      if (tx.risk_score >= 0.5) {
+        const featureMap = {
+          'unique_cp_1d': 'Realiza transferencias con múltiples ordenantes',
+          'tx_count_1h': 'Entrada y/o salida rápida de recursos',
+          'mean_amount': 'Cliente sale de su patrón transaccional',
+          'std_amount': 'Cliente sale de su patrón transaccional',
+          'amount': 'Monto anómalo detectado',
+          'movement_type': 'Alerta',
+          'client_geo_risk': 'Jurisdicción de Riesgo (Cliente)',
+          'counterparty_geo_risk': 'Jurisdicción de Riesgo (Contraparte)',
+          'day_part': 'Horario Inusual'
+        };
+        
+        let explanationText = '';
+        try {
+          const explanation = typeof tx.explanation === 'string' ? JSON.parse(tx.explanation) : tx.explanation;
+          if (explanation && explanation.top_risk_factors) {
+            const topFactors = explanation.top_risk_factors
+              .filter(f => f.impact === 'increases_risk')
+              .sort((a, b) => b.magnitude - a.magnitude)
+              .slice(0, 3)
+              .map(f => featureMap[f.feature] || f.feature);
+            explanationText = topFactors.join(' | ');
+          }
+        } catch (e) {
+          console.error('Error parsing explanation:', e);
+        }
+        
+        const title = explanationText || 'Concentración / Jurisdicción Riesgo';
+        const action = tx.movement_type === 'IN' ? 'Recibió' : 'Envió';
+        const preposition = tx.movement_type === 'IN' ? 'de' : 'a';
+        const counterpartyName = counterparty ? counterparty.name : tx.counterparty_account_id;
+        const counterpartyCountry = counterparty ? counterparty.country : '';
+        const subtitle = `${action} $${amount} ${preposition} ${counterpartyName}${counterpartyCountry ? ' (' + counterpartyCountry + ')' : ''}`;
+        
+        alertSection = `
+          <div style="margin-bottom:20px;padding:12px;background:#FFE5E5;border-left:4px solid var(--risk);border-radius:8px;">
+            <div style="font-weight:700;color:#8B0000;font-size:12px;margin-bottom:4px;">${title}</div>
+            <div style="color:#8B0000;font-size:11px;">${subtitle}</div>
+          </div>
+        `;
+      }
       
       let explanationHtml = '';
       try {
@@ -1044,15 +1107,17 @@
 
       document.getElementById('txModalBody').innerHTML = `
         <h4 style="margin-bottom:20px;color:var(--text);">Detalle de Transacción</h4>
+        ${alertSection}
         <div class="kv">
-          <div class="kv-item"><div class="k">ID</div><div class="v">${tx.transaction_id}</div></div>
+          <div class="kv-item"><div class="k">Transaction ID</div><div class="v">${tx.transaction_id}</div></div>
           <div class="kv-item"><div class="k">Fecha</div><div class="v">${new Date(tx.created_at).toLocaleString('es-MX')}</div></div>
           <div class="kv-item"><div class="k">Monto</div><div class="v">$${amount}</div></div>
           <div class="kv-item"><div class="k">Tipo</div><div class="v">${tx.movement_type} - ${tx.tx_type}</div></div>
-          <div class="kv-item"><div class="k">Cliente</div><div class="v">${tx.client_account_id}</div></div>
+          <div class="kv-item"><div class="k">Cuenta Cliente</div><div class="v">${tx.client_account_id}</div></div>
           <div class="kv-item"><div class="k">Contraparte</div><div class="v">${counterparty ? counterparty.name : tx.counterparty_account_id}</div></div>
+          <div class="kv-item"><div class="k">Cuenta Contraparte</div><div class="v">${tx.counterparty_account_id}</div></div>
           <div class="kv-item"><div class="k">País Contraparte</div><div class="v">${counterparty ? counterparty.country : '--'}</div></div>
-          <div class="kv-item"><div class="k">Score de Riesgo</div><div class="v" style="color:${tx.risk_score >= 75 ? 'var(--risk)' : tx.risk_score >= 50 ? 'var(--warn)' : 'var(--ok)'}">${tx.risk_score || '--'}</div></div>
+          <div class="kv-item"><div class="k">Score de Riesgo</div><div class="v" style="color:${tx.risk_score >= 0.75 ? 'var(--risk)' : tx.risk_score >= 0.5 ? 'var(--warn)' : 'var(--ok)'}">${tx.risk_score || '--'}</div></div>
           <div class="kv-item"><div class="k">Estado</div><div class="v">${tx.status}</div></div>
         </div>
         <div style="margin-top:20px;">
@@ -1081,10 +1146,10 @@
       let meanRiskScore = 0;
       if (recentTxs.length > 0) {
         const weightedAvg = calculateWeightedAverage(recentTxs);
-        meanRiskScore = Math.round(weightedAvg * 100); // Convert to 0-100 scale
+        meanRiskScore = weightedAvg; // Keep as 0-1 scale
       }
       
-      const barColor = meanRiskScore >= 75 ? '#FF4B4B' : meanRiskScore >= 50 ? '#FFA500' : '#00CC96';
+      const barColor = meanRiskScore >= 0.75 ? '#FF4B4B' : meanRiskScore >= 0.5 ? '#FFA500' : '#00CC96';
       
       const fig = [{
         type: "indicator",
@@ -1093,14 +1158,14 @@
         number: { font: { size: 60, color: barColor } },
         title: { text: "", font: { color: "#FAFAFA", size: 14 } },
         gauge: {
-          axis: { range: [0, 100], tickcolor: "#AAB3C5", tickfont: { size: 6 } },
+          axis: { range: [0, 1], tickcolor: "#AAB3C5", tickfont: { size: 6 } },
           bar: { color: barColor, thickness: 0.8 },
           bgcolor: "rgba(0,0,0,0)",
           borderwidth: 0,
           steps: [
-            { range: [0, 50],  color: "rgba(0,204,150,0.3)" },
-            { range: [50, 75], color: "rgba(255,165,0,0.3)" },
-            { range: [75, 100],color: "rgba(255,75,75,0.3)" }
+            { range: [0, 0.5],  color: "rgba(0,204,150,0.3)" },
+            { range: [0.5, 0.75], color: "rgba(255,165,0,0.3)" },
+            { range: [0.75, 1],color: "rgba(255,75,75,0.3)" }
           ]
         }
       }];
@@ -1172,7 +1237,7 @@
         type: "bar",
         orientation: "h",
         y: factors,
-        x: impacts,
+        x: impacts.map(v => v / 100), // Convert to 0-1 scale
         marker: { 
           color: impacts.map(v => v > 0.5 ? '#FF4B4B' : '#666'),
         },
@@ -1189,7 +1254,7 @@
         xaxis: { 
           tickcolor: "#AAB3C5", 
           gridcolor: "rgba(43,52,68,.4)",
-          range: [0, 100],
+          range: [0, 1],
           tickfont: { size: 10 },
           ticksuffix: '%'
         },

@@ -13,5 +13,8 @@ COPY --from=builder /app/deps ${LAMBDA_TASK_ROOT}
 COPY . .
 
 ENV PYTHONPATH=${LAMBDA_TASK_ROOT}
+ENV JOBLIB_TEMP_FOLDER=/tmp
+ENV OMP_NUM_THREADS=1
+ENV OPENBLAS_NUM_THREADS=1
 
 CMD [ "lambda_function.handler" ]

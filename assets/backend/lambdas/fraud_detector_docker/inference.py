@@ -94,7 +94,7 @@ class TransactionRiskPredictor:
                 "movement_type": transaction.get("movement_type", "TRANSFER"),
                 "tx_type": transaction.get("tx_type", "ONLINE"),
                 "amount": float(transaction.get("amount", 0)),
-                "client_risk": transaction.get("client_risk", "LOW"),
+                "client_risk_level": float(transaction.get("client_risk_level", 0.1)),
                 "mean_amount": float(
                     transaction.get("mean_amount", transaction.get("amount", 0))
                 ),

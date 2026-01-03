@@ -1,6 +1,7 @@
 import json
 import os
 import boto3
+from decimal import Decimal
 from main import load_all_tables, get_dynamic_features, init_predictor
 
 
@@ -40,8 +41,7 @@ def handler(event, context):
                 client_tx_state_df,
                 client_recent_activity_df,
             ) = load_all_tables()
-            if init_predictor:
-                predictor = init_predictor()
+            predictor = init_predictor()
             data_loaded = True
             print("Datos cargados y almacenados en memoria global")
         else:
@@ -86,7 +86,7 @@ def handler(event, context):
 
                 result = {
                     "transaction_id": transaction_data["transaction_id"],
-                    "risk_score": int(results[0]["risk_probability"] * 100),
+                    "risk_score": Decimal(str(results[0]["risk_probability"])),
                     "risk_prediction": results[0]["risk_prediction"],
                     "explanation": json.dumps(results[0].get("shap_explanation", {})),
                     "model_version": results[0].get("model_version", "unknown"),
@@ -108,7 +108,14 @@ def handler(event, context):
 
                 sqs.send_message(
                     QueueUrl=output_queue_url,
-                    MessageBody=json.dumps(result),
+                    MessageBody=json.dumps(
+                        {
+                            **result,
+                            "risk_score": float(
+                                result["risk_score"]
+                            ),  # Convert Decimal back to float for JSON
+                        }
+                    ),
                     MessageGroupId=result["transaction_id"],
                     MessageDeduplicationId=f"{result['transaction_id']}-result",
                 )

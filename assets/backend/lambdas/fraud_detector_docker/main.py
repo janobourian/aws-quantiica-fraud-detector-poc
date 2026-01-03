@@ -67,16 +67,16 @@ def log_message(
         log_func(message)
 
 
-def convert_risk_level(risk_int: int) -> str:
-    """Convert integer risk level (1-5) to string (LOW, MEDIUM, HIGH, VERY_HIGH)"""
+def convert_risk_level_to_float(risk_int: int) -> float:
+    """Convert integer risk level (1-5) to float (0.0-1.0)"""
     if risk_int <= 2:
-        return "LOW"
+        return 0.1  # LOW: 0-0.2
     elif risk_int == 3:
-        return "MEDIUM"
+        return 0.35  # MEDIUM: 0.2-0.5
     elif risk_int == 4:
-        return "HIGH"
+        return 0.6  # HIGH: 0.5-0.7
     else:
-        return "VERY_HIGH"
+        return 0.8  # VERY_HIGH: >0.7
 
 
 def init_predictor():
@@ -84,15 +84,14 @@ def init_predictor():
     try:
         if TransactionRiskPredictor is None:
             print("TransactionRiskPredictor not available")
-            return False
+            return None
         predictor = TransactionRiskPredictor()
         predictor.load_model()
         print("Predictor initialized successfully")
         return predictor
     except Exception as e:
         print(f"Error initializing predictor: {e}")
-        predictor = None
-        return False
+        return None
 
 
 def load_dynamodb_table(
@@ -252,7 +251,7 @@ def get_dynamic_features(
     """Prepare Client and Transactions Info for a Inference Job over a transaction record."""
 
     DEFAULT_FEATURES = {
-        "client_risk": 1,
+        "client_risk_level": 0.1,
         "client_geo_risk": 0.4,
         "counterparty_geo_risk": 0.4,
         "tx_count_1h": 1,
@@ -289,14 +288,15 @@ def get_dynamic_features(
         current_time = datetime.strptime(transaction["timestamp"], "%Y-%m-%d %H:%M:%S")
         hour = current_time.hour
 
-        if 6 <= hour < 12:
-            day_part = "morning"
-        elif 12 <= hour < 18:
-            day_part = "afternoon"
-        elif 18 <= hour < 24:
-            day_part = "evening"
-        else:
-            day_part = "night"
+        # if 6 <= hour < 12:
+        #     day_part = "morning"
+        # elif 12 <= hour < 18:
+        #     day_part = "afternoon"
+        # elif 18 <= hour < 24:
+        #     day_part = "evening"
+        # else:
+        #     day_part = "night"
+        day_part = "night"
 
         geo_risk_map = build_geo_risk_map()
 
@@ -404,7 +404,9 @@ def get_dynamic_features(
             unique_cp_1d = 0
 
         calculated_features = {
-            "client_risk": client_risk if client_risk else 1,
+            "client_risk_level": (
+                convert_risk_level_to_float(client_risk) if client_risk else 0.1
+            ),
             "client_geo_risk": client_geo_risk,
             "counterparty_geo_risk": counterparty_geo_risk,
             "tx_count_1h": tx_count_1h,

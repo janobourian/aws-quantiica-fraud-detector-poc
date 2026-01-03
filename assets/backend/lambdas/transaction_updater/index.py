@@ -2,6 +2,7 @@ import json
 import os
 import boto3
 from datetime import datetime, timezone, timedelta
+from decimal import Decimal
 
 dynamodb = boto3.resource("dynamodb")
 transactions_table = dynamodb.Table(os.environ["TRANSACTIONS_TABLE_NAME"])
@@ -35,7 +36,7 @@ def handler(event, context):
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={
                     ":status": "ANALYZED",
-                    ":score": result["risk_score"],
+                    ":score": Decimal(str(result["risk_score"])),
                     ":prediction": result["risk_prediction"],
                     ":explanation": result["explanation"],
                     ":updated_at": now,
@@ -43,8 +44,8 @@ def handler(event, context):
                 },
             )
 
-            # Broadcast to WebSocket clients only if risk_score >= 50
-            if result["risk_score"] >= 50:
+            # Broadcast to WebSocket clients only if risk_score >= 0.5
+            if result["risk_score"] >= 0.5:
                 broadcast_message = {
                     "type": "analyzed_transaction",
                     "status": "ANALYZED",
@@ -58,7 +59,7 @@ def handler(event, context):
 
             else:
                 print(
-                    f"Transaction {result['transaction_id']} has risk_score < 50, not broadcasting"
+                    f"Transaction {result['transaction_id']} has risk_score < 0.5, not broadcasting"
                 )
 
         return {"statusCode": 200}
